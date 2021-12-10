@@ -1,0 +1,61 @@
+import bs4 
+import requests
+import re
+import boto3
+
+initializeOffers = {}
+arr = {}
+
+
+initializeOffers = {}
+arr = {}
+def Myjoblist(search):
+    location = "Canada Ontario
+    search = search.replace(' ','%20')
+    location = location.replace(' ','%20')
+    location = location.replace(',', '%2C')
+    web = 'https://ca.linkedin.com/jobs/search?keywords=%s&location=%s&geoId=101788145&trk=public_jobs_jobs-search-bar_search-submit&position=1&pageNum=0' % (search, location)
+    html = requests.get(web).content
+    soup = bs4.BeautifulSoup(html, "html.parser")
+    limit = 1
+    title = [title.text.strip() for title in soup.find_all(class_=re.compile("base-search-card__title"), limit=limit)]
+    link  = [link['href'].strip() for link in soup.find_all(class_=re.compile("base-card__full-link"), href=True, limit=limit)]
+    company = [company.text.strip() for company in soup.find_all(class_=re.compile("hidden-nested-link"), limit=limit)]
+    location = [location.text.strip() for location in soup.find_all(class_=re.compile("job-search-card__location"), limit=limit)]
+    date = [date.text.strip() for date in soup.find_all(class_=re.compile("job-search-card__listdate"), limit=limit)]  
+    jobs = list(zip(title, link, company, location, date))
+    initializeOffers[search] = jobs
+    length = len(search)
+    if length in [i for i in arr.keys()]:
+        arr[length].append(initializeOffers)
+    else:
+        arr[length] = initializeOffers
+    dynamodb = boto3.resource('dynamodb',
+                          aws_access_key_id="AKIATU5KFPSAQMTUYKVS",
+                          aws_secret_access_key="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",
+                          region_name="ca-central-1",
+                          endpoint_url="https://dynamodb.ca-central-1.amazonaws.com")
+    table = dynamodb.Table('JobBase')
+    item = {
+            "Offers": search,
+            "date": date,
+            "location": location,
+            "company": company,
+            "link": link,
+            "title": title
+}
+    response = table.put_item(Item=item)
+    return response
+
+print(Myjoblist())
+
+def search():
+    search = input()
+    length = len(search)
+    if length in [i for i in arr.keys()]: 
+        for x in arr[length].keys():
+            if x == search:
+                return arr[length][x]
+    else:
+        return Myjoblist(search)
+search()
